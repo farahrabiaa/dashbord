@@ -17,6 +17,7 @@ import Users from './Pages/Users';
 import Media from './Pages/Media';
 import Wallet from './Pages/Wallet';
 import WalletSettings from './Pages/WalletSettings';
+import WalletCharging from './Pages/WalletCharging';
 import Notifications from './Pages/Notifications';
 import Settings from './Pages/Settings';
 import Advertisements from './Pages/Advertisements';
@@ -88,6 +89,7 @@ export default function AdminDashboard() {
             <Route path="/coupons" element={<Coupons />} />
             <Route path="/wallet" element={<Wallet />} />
             <Route path="/wallet-settings" element={<WalletSettings />} />
+            <Route path="/wallet-charging" element={<WalletCharging />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/advertisements" element={<Advertisements />} />

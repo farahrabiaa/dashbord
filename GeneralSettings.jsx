@@ -1,31 +1,51 @@
 import React, { useState } from 'react';
 import { toast } from 'react-toastify';
-import MediaUpload from './Products/MediaUpload';
+import MediaUpload from '../Products/MediaUpload';
+import { useSettings } from '../../contexts/SettingsContext';
+import { BUCKETS } from '../../lib/supabaseStorage';
 
 export default function GeneralSettings() {
+  const { settings: globalSettings, saveSettings, updateStoreName } = useSettings();
   const [settings, setSettings] = useState({
-    store_name: 'متجر خدماتكم',
-    logo: '/logo.png',
-    admin: {
-      name: 'مدير النظام',
-      email: 'admin@example.com',
-      phone: '0599123456',
-      address: 'غزة، فلسطين'
+    store: {
+      ...globalSettings.store
+    },
+    social: {
+      ...globalSettings.social
+    },
+    notifications: {
+      ...globalSettings.notifications
     }
   });
   const [errors, setErrors] = useState({
     logo: null
   });
 
-  const handleSave = () => {
-    // Here you would typically save to backend
-    toast.success('تم حفظ الإعدادات بنجاح');
+  const handleSave = async () => {
+    try {
+      // Save all settings
+      const success = await saveSettings(settings);
+      if (success) {
+        // Update document title with new store name
+        document.title = `لوحة تحكم ${settings.store.name}`;
+        toast.success('تم حفظ الإعدادات بنجاح');
+      }
+    } catch (error) {
+      toast.error('فشل في حفظ الإعدادات');
+    }
   };
 
-  const handleLogoUpload = ({ preview }) => {
+  const handleLogoUpload = ({ preview, path, isSupabaseFile }) => {
     setErrors({ ...errors, logo: null });
     if (preview) {
-      setSettings({ ...settings, logo: preview });
+      setSettings({
+        ...settings,
+        store: { 
+          ...settings.store, 
+          logo: preview,
+          logo_path: isSupabaseFile ? path : null
+        }
+      });
     } else {
       setErrors({ ...errors, logo: 'فشل في تحميل الشعار' });
     }
@@ -33,52 +53,30 @@ export default function GeneralSettings() {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">الإعدادات العامة</h2>
+        <button
+          onClick={handleSave}
+          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+        >
+          حفظ التغييرات
+        </button>
+      </div>
+
       {/* Store Settings */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold mb-4">إعدادات المتجر</h3>
-        <div className="space-y-4">
+        <h3 className="text-lg font-semibold mb-4">معلومات المتجر</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               اسم المتجر
             </label>
             <input
               type="text"
-              value={settings.store_name}
-              onChange={(e) => setSettings({ ...settings, store_name: e.target.value })}
-              className="w-full border rounded-md px-3 py-2"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              شعار المتجر
-            </label>
-            <MediaUpload
-              type="image"
-              preview={settings.logo}
-              onUpload={handleLogoUpload}
-            />
-            {errors.logo && (
-              <p className="mt-2 text-sm text-red-600">{errors.logo}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Admin Settings */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold mb-4">معلومات المدير</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              اسم المدير
-            </label>
-            <input
-              type="text"
-              value={settings.admin.name}
+              value={settings.store.name}
               onChange={(e) => setSettings({
                 ...settings,
-                admin: { ...settings.admin, name: e.target.value }
+                store: { ...settings.store, name: e.target.value }
               })}
               className="w-full border rounded-md px-3 py-2"
             />
@@ -90,10 +88,10 @@ export default function GeneralSettings() {
             </label>
             <input
               type="email"
-              value={settings.admin.email}
+              value={settings.store.email}
               onChange={(e) => setSettings({
                 ...settings,
-                admin: { ...settings.admin, email: e.target.value }
+                store: { ...settings.store, email: e.target.value }
               })}
               className="w-full border rounded-md px-3 py-2"
             />
@@ -105,10 +103,10 @@ export default function GeneralSettings() {
             </label>
             <input
               type="tel"
-              value={settings.admin.phone}
+              value={settings.store.phone}
               onChange={(e) => setSettings({
                 ...settings,
-                admin: { ...settings.admin, phone: e.target.value }
+                store: { ...settings.store, phone: e.target.value }
               })}
               className="w-full border rounded-md px-3 py-2"
             />
@@ -116,29 +114,184 @@ export default function GeneralSettings() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
+              العملة
+            </label>
+            <select
+              value={settings.store.currency}
+              onChange={(e) => setSettings({
+                ...settings,
+                store: { ...settings.store, currency: e.target.value }
+              })}
+              className="w-full border rounded-md px-3 py-2"
+            >
+              <option value="ILS">₪ شيكل</option>
+              <option value="USD">$ دولار</option>
+              <option value="JOD">د.أ دينار</option>
+            </select>
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               العنوان
             </label>
             <input
               type="text"
-              value={settings.admin.address}
+              value={settings.store.address}
               onChange={(e) => setSettings({
                 ...settings,
-                admin: { ...settings.admin, address: e.target.value }
+                store: { ...settings.store, address: e.target.value }
               })}
               className="w-full border rounded-md px-3 py-2"
+            />
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              وصف المتجر
+            </label>
+            <textarea
+              value={settings.store.description}
+              onChange={(e) => setSettings({
+                ...settings,
+                store: { ...settings.store, description: e.target.value }
+              })}
+              rows="3"
+              className="w-full border rounded-md px-3 py-2"
+            />
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              شعار المتجر
+            </label>
+            <MediaUpload
+              type="image"
+              preview={settings.store.logo}
+              onUpload={handleLogoUpload}
+              storeInSupabase={true}
+              bucket={BUCKETS.GENERAL}
+              folder="logos"
+            />
+            {errors.logo && (
+              <p className="mt-2 text-sm text-red-600">{errors.logo}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Social Media Settings */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold mb-4">روابط التواصل الاجتماعي</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              فيسبوك
+            </label>
+            <input
+              type="url"
+              value={settings.social.facebook}
+              onChange={(e) => setSettings({
+                ...settings,
+                social: { ...settings.social, facebook: e.target.value }
+              })}
+              className="w-full border rounded-md px-3 py-2"
+              placeholder="https://facebook.com/..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              تويتر
+            </label>
+            <input
+              type="url"
+              value={settings.social.twitter}
+              onChange={(e) => setSettings({
+                ...settings,
+                social: { ...settings.social, twitter: e.target.value }
+              })}
+              className="w-full border rounded-md px-3 py-2"
+              placeholder="https://twitter.com/..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              انستغرام
+            </label>
+            <input
+              type="url"
+              value={settings.social.instagram}
+              onChange={(e) => setSettings({
+                ...settings,
+                social: { ...settings.social, instagram: e.target.value }
+              })}
+              className="w-full border rounded-md px-3 py-2"
+              placeholder="https://instagram.com/..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              واتساب
+            </label>
+            <input
+              type="tel"
+              value={settings.social.whatsapp}
+              onChange={(e) => setSettings({
+                ...settings,
+                social: { ...settings.social, whatsapp: e.target.value }
+              })}
+              className="w-full border rounded-md px-3 py-2"
+              placeholder="رقم الواتساب"
             />
           </div>
         </div>
       </div>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
-        >
-          حفظ الإعدادات
-        </button>
+      {/* Notification Settings */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold mb-4">إعدادات الإشعارات</h3>
+        <div className="space-y-4">
+          <label className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              checked={settings.notifications.email}
+              onChange={(e) => setSettings({
+                ...settings,
+                notifications: { ...settings.notifications, email: e.target.checked }
+              })}
+              className="rounded text-blue-600 focus:ring-blue-500"
+            />
+            <span>إشعارات البريد الإلكتروني</span>
+          </label>
+
+          <label className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              checked={settings.notifications.sms}
+              onChange={(e) => setSettings({
+                ...settings,
+                notifications: { ...settings.notifications, sms: e.target.checked }
+              })}
+              className="rounded text-blue-600 focus:ring-blue-500"
+            />
+            <span>إشعارات الرسائل النصية</span>
+          </label>
+
+          <label className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              checked={settings.notifications.push}
+              onChange={(e) => setSettings({
+                ...settings,
+                notifications: { ...settings.notifications, push: e.target.checked }
+              })}
+              className="rounded text-blue-600 focus:ring-blue-500"
+            />
+            <span>إشعارات التطبيق</span>
+          </label>
+        </div>
       </div>
     </div>
   );
