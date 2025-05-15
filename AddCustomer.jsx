@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { supabase } from '../../lib/supabase';
-import { v4 as uuidv4 } from 'uuid';
 
 export default function AddCustomer() {
   const [loading, setLoading] = useState(false);
@@ -49,7 +48,7 @@ export default function AddCustomer() {
       
       // التحقق من البيانات المطلوبة
       if (!formData.name || !formData.phone) {
-        toast.error('الرجاء تعبئة جميع الحقول المطلوبة');
+        toast.error('الرجاء إدخال الاسم ورقم الهاتف');
         setLoading(false);
         return;
       }
@@ -104,6 +103,13 @@ export default function AddCustomer() {
           setLoading(false);
           return;
         }
+        
+        // التحقق من صحة كلمة المرور
+        if (formData.password.length < 6) {
+          toast.error('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
+          setLoading(false);
+          return;
+        }
 
         // إنشاء مستخدم جديد في نظام المصادقة
         const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -121,8 +127,61 @@ export default function AddCustomer() {
         if (authError) {
           console.error('Error creating user:', authError);
           toast.error("خطأ في إنشاء المستخدم: " + authError.message);
-          setLoading(false);
-          return;
+          
+          // محاولة إنشاء مستخدم مخصص بدلاً من استخدام نظام المصادقة
+          try {
+            // إنشاء مستخدم مخصص
+            const { data: userId, error: userError } = await supabase.rpc(
+              'add_custom_user',
+              {
+                p_username: formData.phone,
+                p_password: formData.password,
+                p_name: formData.name,
+                p_email: formData.email,
+                p_phone: formData.phone,
+                p_role: 'customer'
+              }
+            );
+            
+            if (userError) throw userError;
+            
+            // إضافة زبون جديد
+            const { data, error } = await supabase
+              .from('customers')
+              .insert([{
+                user_id: userId,
+                name: formData.name,
+                phone: formData.phone,
+                email: formData.email,
+                address: formData.address,
+                notes: formData.notes
+              }])
+              .select();
+            
+            if (error) throw error;
+            
+            toast.success('تم إضافة الزبون بنجاح');
+            
+            // إعادة تعيين النموذج
+            setFormData({
+              name: '',
+              phone: '',
+              email: '',
+              password: '',
+              address: '',
+              notes: ''
+            });
+            setIsEditing(false);
+            setCustomerId(null);
+            
+            setLoading(false);
+            return;
+          } catch (customError) {
+            console.error('Error creating custom user:', customError);
+            toast.error("فشل في إنشاء مستخدم مخصص: " + customError.message);
+            setLoading(false);
+            return;
+          }
         }
         
         // إضافة زبون جديد
@@ -166,6 +225,14 @@ export default function AddCustomer() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">{isEditing ? 'تعديل بيانات الزبون' : 'إضافة زبون جديد'}</h2>
+      
+      {!isEditing && (
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-4">
+          <p className="text-blue-700">
+            سيتم إنشاء حساب للزبون باستخدام رقم الهاتف كاسم مستخدم وكلمة المرور المدخلة.
+          </p>
+        </div>
+      )}
       
       <div className="bg-white rounded-lg shadow-md p-6">
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -214,14 +281,17 @@ export default function AddCustomer() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   كلمة المرور {isEditing ? '' : <span className="text-red-600">*</span>}
                 </label>
-                <input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full border rounded-md px-3 py-2"
-                  required={!isEditing}
-                  placeholder={isEditing ? "اتركه فارغاً للاحتفاظ بكلمة المرور الحالية" : ""}
-                />
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full border rounded-md px-3 py-2"
+                    required={!isEditing}
+                    placeholder={isEditing ? "اتركه فارغاً للاحتفاظ بكلمة المرور الحالية" : ""}
+                    minLength={6}
+                  />
+                </div>
                 {isEditing && (
                   <p className="mt-1 text-sm text-gray-500">
                     اتركه فارغاً للاحتفاظ بكلمة المرور الحالية
@@ -256,6 +326,26 @@ export default function AddCustomer() {
           </div>
           
           <div className="flex justify-end space-x-2">
+            {isEditing && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(false);
+                  setCustomerId(null);
+                  setFormData({
+                    name: '',
+                    phone: '',
+                    email: '',
+                    password: '',
+                    address: '',
+                    notes: ''
+                  });
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 ml-2"
+              >
+                إلغاء
+              </button>
+            )}
             <button
               type="submit"
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -266,6 +356,18 @@ export default function AddCustomer() {
           </div>
         </form>
       </div>
+      
+      {!isEditing && (
+        <div className="bg-blue-50 border border-blue-200 p-6 rounded-lg">
+          <h3 className="text-lg font-semibold text-blue-800 mb-4">ملاحظات هامة</h3>
+          <ul className="list-disc list-inside space-y-2 text-blue-700">
+            <li>يتم إنشاء حساب للزبون باستخدام رقم الهاتف كاسم مستخدم.</li>
+            <li>يجب أن تكون كلمة المرور 6 أحرف على الأقل.</li>
+            <li>يمكن للزبون تسجيل الدخول باستخدام رقم الهاتف وكلمة المرور.</li>
+            <li>يمكن للزبون تغيير كلمة المرور لاحقًا من خلال حسابه.</li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
